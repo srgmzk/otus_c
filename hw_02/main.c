@@ -3,14 +3,14 @@
  *
  *       Filename:  main.c
  *
- *    Description:  
+ *    Description:  utf-8 converter form cp-1251, koi8-r, iso-8859-5
  *
  *        Version:  1.0
- *        Created:  27.10.2022 10:37:22
+ *        Created:  
  *       Revision:  none
  *       Compiler:  gcc
  *
- *         Author:  YOUR NAME (), 
+ *         Author:  sergei.mos@gmail.com 
  *   Organization:  
  *
  * =====================================================================================
@@ -18,22 +18,38 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdint.h>
+#include <errno.h>
+#include <string.h>
 
-unsigned koi8_table[] = { [0 ... 191] = 0, 
+
+#define KOI8_SHIFT 192
+#define WIN1251_SHIFT 192
+#define ISO8859_SHIFT 176
+#define MAX_TYPE_LEN 7 
+
+enum code_types { WIN1251, KOI8, ISO8859 };
+static char *ctype_names[MAX_TYPE_LEN] = {"win1251", "koi8", "iso8859"};
+
+void conv2utf8(const uint16_t table[], FILE *in, FILE *out, uint8_t shift);
+
+static const uint16_t koi8_table[] = { 
 	0x8ed1, 0xb0d0, 0xb1d0, 0x86d1, 0xb4d0, 0xb5d0, 0x84d1, 0xb3d0, 0x85d1, 0xb8d0, 0xb9d0, 0xbad0,	0xbbd0, 0xbcd0, 0xbdd0,	0xbed0, 
 	0xbfd0, 0x8fd1, 0x80d1, 0x81d1, 0x82d1, 0x83d1, 0xb6d0, 0xb2d0, 0x8cd1, 0x8bd1, 0xb7d0, 0x88d1, 0x8dd1, 0x89d1, 0x87d1, 0x8ad1, 
 	0xaed0,	0x90d0, 0x91d0, 0xa6d0, 0x94d0, 0x95d0, 0xa4d0, 0x93d0, 0xa5d0, 0x98d0, 0x99d0, 0x9ad0, 0x9bd0,	0x9cd0, 0x9dd0, 0x9ed0, 
 	0x9fd0, 0xafd0, 0xa0d0, 0xa1d0, 0xa2d0, 0xa3d0, 0x96d0, 0x92d0, 0xacd0,	0xabd0, 0x97d0, 0xa8d0, 0xadd0, 0xa9d0, 0xa7d0, 0xaad0  
 };
 
-unsigned win1251_table[] = { [0 ... 191] = 0, 
+static const uint16_t win1251_table[] = {
 	0x90d0, 0x91d0, 0x92d0, 0x93d0, 0x94d0, 0x95d0, 0x96d0, 0x97d0, 0x98d0, 0x99d0, 0x9ad0, 0x9bd0, 0x9cd0, 0x9dd0, 0x9ed0, 0x9fd0,
 	0xa0d0, 0xa1d0, 0xa2d0, 0xa3d0, 0xa4d0, 0xa5d0, 0xa6d0, 0xa7d0, 0xa8d0, 0xa9d0, 0xaad0, 0xabd0, 0xacd0, 0xadd0, 0xaed0, 0xafd0,
 	0xb0d0, 0xb1d0, 0xb2d0, 0xb3d0, 0xb4d0, 0xb5d0, 0xb6d0, 0xb7d0, 0xb8d0, 0xb9d0, 0xbad0, 0xbbd0, 0xbcd0, 0xbdd0, 0xbed0, 0xbfd0,
 	0x80d1, 0x81d1, 0x82d1, 0x83d1, 0x84d1, 0x85d1, 0x86d1, 0x87d1, 0x88d1, 0x89d1, 0x8ad1, 0x8bd1, 0x8cd1, 0x8dd1, 0x8ed1, 0x8fd1
 };
 
-unsigned iso8859_5_table[] = { [0 ... 175] = 0, 
+static const uint16_t iso8859_5_table[] = { 
 	0x90d0, 0x91d0, 0x92d0, 0x93d0, 0x94d0, 0x95d0, 0x96d0, 0x97d0, 0x98d0, 0x99d0, 0x9ad0, 0x9bd0, 0x9cd0, 0x9dd0, 0x9ed0, 0x9fd0,
 	0xa0d0, 0xa1d0, 0xa2d0, 0xa3d0, 0xa4d0, 0xa5d0, 0xa6d0, 0xa7d0, 0xa8d0, 0xa9d0, 0xaad0, 0xabd0, 0xacd0, 0xadd0, 0xaed0, 0xafd0,
 	0xb0d0, 0xb1d0, 0xb2d0, 0xb3d0, 0xb4d0, 0xb5d0, 0xb6d0, 0xb7d0, 0xb8d0, 0xb9d0, 0xbad0, 0xbbd0, 0xbcd0, 0xbdd0, 0xbed0, 0xbfd0,
@@ -42,31 +58,50 @@ unsigned iso8859_5_table[] = { [0 ... 175] = 0,
 
 
 int main(int argc, char **argv) {
-		
-	FILE *f1 = fopen("iso-8859-5.txt", "r"); 
-	FILE *f2 = fopen("utf8.txt", "w+"); 
-	unsigned sym;
-#if 0
-		fread(&sym,1,1, f1);
-		printf("%x ", sym);
-		printf("%x", koi8_table[sym + 1]);
-		if (sym < 192)	
-			fwrite(&sym,1,1,f2); 
-		else
-	//	putchar(koi8_table[sym]); 
-			fwrite(&koi8_table[sym + 1],1,2,f2); 
-#endif
-	#if 1
-	while ( !feof(f1) ) {
-		fread(&sym,1,1, f1);
-		if (sym < 176)	
-			fwrite(&sym,1,1,f2); 
-		else
-			fwrite(&iso8859_5_table[sym],1,2,f2); 
+
+	if (argc < 4) {
+		puts("Usage: out <in_file> <code_type (win1251|koi8|iso8859)> <out_file>");
+		exit(0);
 	}
-	#endif
+	int ret;
+
+	FILE *f1 = fopen(argv[1], "r"); 
+	if (!f1) {
+		perror(argv[1]);
+		exit(EXIT_FAILURE);
+	}
+
+	FILE *f2 = fopen(argv[3], "w+"); 
+	if (!f2) {
+		perror(argv[1]);
+		exit(EXIT_FAILURE);
+	}
+
+	if (!(ret = strncmp(argv[2], ctype_names[WIN1251], strlen(argv[2])))) {
+			conv2utf8(win1251_table,f1, f2, WIN1251_SHIFT);
+	} else if (!(ret = strncmp(argv[2], ctype_names[KOI8], strlen(argv[2])))) {
+			conv2utf8(koi8_table,f1, f2, KOI8_SHIFT);
+	} else if (!(ret = strncmp(argv[2], ctype_names[ISO8859], strlen(argv[2])))) {
+			conv2utf8(iso8859_5_table,f1, f2, ISO8859_SHIFT);
+	} else {
+		puts("Unknown code type. Possible: win1251, koi8, iso8859.");
+		exit(0);
+	}
+
 	fclose(f1);
 	fclose(f2);
 	
 	exit(EXIT_SUCCESS);
+}
+
+void conv2utf8(const uint16_t table[], FILE *in, FILE *out, uint8_t shift) {
+	uint16_t sym;
+	while ( !feof(in) ) {
+		fread(&sym,1,1,in);
+		if (sym < shift)	
+			fwrite(&sym,1,1,out); 
+		else
+			fwrite(&table[sym-shift],1,2,out); 
+	}
+	return;
 }

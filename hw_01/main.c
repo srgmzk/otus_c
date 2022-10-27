@@ -48,42 +48,38 @@ struct FileHeader
 int main(int argc, char **argv) {
 
 	if (argc < 2) {
-		puts("Program using: out <file_name>");
+		puts("Usage: out <file_name>");
 		exit(0);
 	}
 
-	ssize_t ret;
 	struct FileHeader fh;
-	int i = 0;
+	long i = 0;
+	char buffer[PATH_MAX] = "\0";
 
-	int fd = open(argv[1], O_RDONLY);
-	if (fd == -1) {
+	FILE *f = fopen(argv[1], "rb");
+
+	if (!f) {
 		perror(argv[1]);
 		exit(EXIT_FAILURE);
 	}
 
-	off_t curr = lseek(fd, 0, SEEK_END);
-	off_t first = lseek(fd, 0, SEEK_SET);
-	char buffer[PATH_MAX] = "\0";
-
-	while(curr != first )
-	{
-		ret = read(fd, &fh, sizeof(struct FileHeader));
-		if (ret == -1) {
-			if (errno == EINTR)
-				continue;
-			perror("read");
-			exit(EXIT_FAILURE);
-		}
-		if (fh.signature == ZIP_MAGIC_NUM) 
-		{
+	if (fseek(f, 0, SEEK_SET) == -1) {
+		perror("fseek");
+		exit(EXIT_FAILURE);
+	}
+	
+	while ( fread(&fh, sizeof(struct FileHeader), 1, f) ) {
+		if (fh.signature == ZIP_MAGIC_NUM) {
 			snprintf(buffer, fh.filenameLength + 1, "%s", (char *)&fh.filename);
 			puts(buffer);
 		}
-		first = lseek(fd, ++i, SEEK_SET);
+		if (fseek(f, ++i, SEEK_SET) == -1) {
+			perror("fseek");
+			break;
+		}
 	}
 	if (buffer[0] == '\0')
 		printf("File is not zip archive\n");
-	close(fd);
+	fclose(f);
 	return EXIT_SUCCESS;
 }
