@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
 }
 
 void conv2utf8(const uint16_t table[], FILE *in, FILE *out, uint8_t shift) {
-	uint16_t sym;
+	unsigned char sym;
 	while ( !feof(in) ) {
 		fread(&sym,1,1,in);
 		if (sym < shift)	
