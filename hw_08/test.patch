@@ -1,0 +1,12 @@
+diff -Naur ./clib_old/test/package/package-new-from-slug.c ./clib/test/package/package-new-from-slug.c
+--- ./clib_old/test/package/package-new-from-slug.c	2022-12-12 11:52:41.803720827 +0500
++++ ./clib/test/package/package-new-from-slug.c	2022-12-12 13:02:23.083901182 +0500
+@@ -70,5 +70,8 @@
+     }
+   }
+ 
++  curl_global_cleanup();
++  clib_package_cleanup();
++
+   return assert_failures();
+ }
